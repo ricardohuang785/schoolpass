@@ -1,4 +1,4 @@
-import sqlite3, hashlib, secrets, os, hmac, csv, datetime, re
+import sqlite3, hashlib, secrets, os, hmac, csv, io, datetime, re
 
 try:
     import qrcode
@@ -76,7 +76,11 @@ class DBManager:
         self.conn.commit(); return "OK"
 
     def obter_eventos(self, filtro=""):
-        q = "SELECT e.*, u.nome AS organizador FROM eventos e JOIN utilizadores u ON e.org_id=u.id WHERE e.cancelado=0"
+        q = """
+        SELECT e.*, u.nome AS organizador,
+        (SELECT COUNT(*) FROM inscricoes i WHERE i.e_id=e.id AND i.espera=0 AND i.cancelada=0) AS inscritos
+        FROM eventos e JOIN utilizadores u ON e.org_id=u.id WHERE e.cancelado=0
+        """
         if filtro: q += " AND (e.titulo LIKE ? OR e.cat LIKE ?)"
         return [dict(r) for r in self.conn.execute(q, (f"%{filtro}%", f"%{filtro}%") if filtro else ()).fetchall()]
 
@@ -107,7 +111,7 @@ class DBManager:
         return ev and (adm or ev['org_id'] == oid)
 
     def obter_bilhetes(self, uid):
-        return [dict(r) for r in self.conn.execute("SELECT i.*, e.titulo FROM inscricoes i JOIN eventos e ON i.e_id=e.id WHERE i.u_id=? AND i.cancelada=0 AND e.cancelado=0", (uid,)).fetchall()]
+        return [dict(r) for r in self.conn.execute("SELECT i.*, e.titulo, e.local FROM inscricoes i JOIN eventos e ON i.e_id=e.id WHERE i.u_id=? AND i.cancelada=0 AND e.cancelado=0", (uid,)).fetchall()]
 
     def inscrever(self, uid, eid):
         with self.conn:
@@ -128,6 +132,7 @@ class DBManager:
         with self.conn:
             ins = self.conn.execute("SELECT * FROM inscricoes WHERE id=? AND u_id=? AND cancelada=0", (iid, uid)).fetchone()
             if not ins: return "Inscrição não encontrada."
+            if ins['checkin'] == 1: return "Não pode cancelar após check-in."
             self.conn.execute("UPDATE inscricoes SET cancelada=1 WHERE id=?", (iid,))
             if ins['espera'] == 0:
                 prox = self.conn.execute("SELECT * FROM inscricoes WHERE e_id=? AND espera=1 AND cancelada=0 ORDER BY id ASC LIMIT 1", (ins['e_id'],)).fetchone()
@@ -135,3 +140,16 @@ class DBManager:
                     self.conn.execute("UPDATE inscricoes SET espera=0 WHERE id=?", (prox['id'],))
                     self.notificar(prox['u_id'], "🎉 Saiu da lista de espera! Inscrição confirmada.")
             return "Inscrição cancelada."
+
+    # --- CHECK-IN E QR CODE ---
+    def fazer_checkin(self, cod, staff_id, adm):
+        cod = cod.strip().upper()
+        ins = self.conn.execute("""
+            SELECT i.*, e.titulo, e.org_id, u.nome AS aluno
+            FROM inscricoes i
+            JOIN eventos e ON i.e_id=e.id
+            JOIN utilizadores u ON i.u_id=u.id
+            WHERE i.cod=? AND i.cancelada=0 AND e.cancelado=0
+        """, (cod,)).fetchone()
+        if not ins: return "❌ Código inválido ou inscrição cancelada."
+        if not adm and ins['org_id'] != staff_id: return "❌ Sem permissão para este evento."
