@@ -1,4 +1,15 @@
-    # --- ABA 1: EVENTOS ---
+import streamlit as st
+import main as db
+
+st.set_page_config(page_title="SchoolPass", layout="wide")
+st.title("SchoolPass")
+
+user = {"id": 1}
+is_staff = True
+
+tabs = st.tabs(["Eventos", "Os Meus Bilhetes", "Criar Evento"])
+    
+# --- ABA 1: EVENTOS ---
     with tabs[0]:
         filtro = st.text_input("🔍 Pesquisar por título ou categoria", placeholder="Ex: Futsal, palestra...")
         eventos = db.obter_eventos(filtro)
