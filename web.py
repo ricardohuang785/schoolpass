@@ -10,7 +10,7 @@ is_staff = True
 tabs = st.tabs(["Eventos", "Os Meus Bilhetes", "Criar Evento"])
     
 # --- ABA 1: EVENTOS ---
-    with tabs[0]:
+with tabs[0]:
         filtro = st.text_input("🔍 Pesquisar por título ou categoria", placeholder="Ex: Futsal, palestra...")
         eventos = db.obter_eventos(filtro)
 
@@ -32,8 +32,9 @@ tabs = st.tabs(["Eventos", "Os Meus Bilhetes", "Criar Evento"])
                             else:
                                 st.warning(msg)
 
-    # --- ABA 2: OS MEUS BILHETES ---
-    with tabs[1]:
+    
+# --- ABA 2: OS MEUS BILHETES ---
+with tabs[1]:
         st.header("Os Meus Bilhetes")
         bilhetes = db.obter_bilhetes(user["id"])
 
