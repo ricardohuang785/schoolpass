@@ -1,16 +1,69 @@
 import streamlit as st
-import main as db
+from main import DBManager
 
-st.set_page_config(page_title="SchoolPass", layout="wide")
-st.title("SchoolPass")
+st.set_page_config(page_title="SchoolPass", page_icon="🎟️", layout="wide")
 
-user = {"id": 1}
-is_staff = True
+@st.cache_resource
+def get_db():
+    return DBManager()
 
-tabs = st.tabs(["Eventos", "Os Meus Bilhetes", "Criar Evento"])
-    
-# --- ABA 1: EVENTOS ---
-with tabs[0]:
+db = get_db()
+
+if "user" not in st.session_state:
+    st.session_state.user = None
+
+# --- ECRÃ DE LOGIN / REGISTO ---
+if not st.session_state.user:
+    st.title("🎟️ SchoolPass")
+    st.subheader("Gestão de Eventos Escolares")
+
+    tab_login, tab_reg = st.tabs(["Entrar", "Criar Conta (Aluno)"])
+
+    with tab_login:
+        with st.form("form_login"):
+            email = st.text_input("Email", placeholder="ex: prof@escola.pt")
+            senha = st.text_input("Senha", type="password")
+            if st.form_submit_button("Entrar", use_container_width=True):
+                u = db.auth(email, senha)
+                if u:
+                    st.session_state.user = u
+                    st.rerun()
+                else:
+                    st.error("Email ou senha incorretos.")
+
+    with tab_reg:
+        with st.form("form_reg"):
+            nome = st.text_input("Nome Completo")
+            email_r = st.text_input("Email Escolar")
+            senha_r = st.text_input("Senha (mínimo 6 caracteres)", type="password")
+            if st.form_submit_button("Registar", use_container_width=True):
+                res = db.registar(nome, email_r, senha_r)
+                if res == "OK":
+                    st.success("Conta criada! Já pode entrar no separador 'Entrar'.")
+                else:
+                    st.error(res)
+
+# --- APLICAÇÃO PRINCIPAL ---
+else:
+    user = st.session_state.user
+    is_staff = user["papel"] in ("admin", "professor")
+
+    col_tit, col_user = st.columns([4, 1])
+    with col_tit:
+        st.title("🎟️ SchoolPass")
+    with col_user:
+        st.write(f"👤 **{user['nome']}** ({user['papel']})")
+        if st.button("Sair", use_container_width=True):
+            st.session_state.user = None
+            st.rerun()
+
+    nomes_tabs = ["Eventos", "Os Meus Bilhetes"]
+    if is_staff:
+        nomes_tabs.append("Criar Evento")
+    tabs = st.tabs(nomes_tabs)
+
+    # --- ABA 1: EVENTOS ---
+    with tabs[0]:
         filtro = st.text_input("🔍 Pesquisar por título ou categoria", placeholder="Ex: Futsal, palestra...")
         eventos = db.obter_eventos(filtro)
 
@@ -32,9 +85,8 @@ with tabs[0]:
                             else:
                                 st.warning(msg)
 
-    
-# --- ABA 2: OS MEUS BILHETES ---
-with tabs[1]:
+    # --- ABA 2: OS MEUS BILHETES ---
+    with tabs[1]:
         st.header("Os Meus Bilhetes")
         bilhetes = db.obter_bilhetes(user["id"])
 
@@ -55,7 +107,7 @@ with tabs[1]:
                             st.rerun()
 
     # --- ABA 3: GERIR EVENTOS (PROFESSOR / ADMIN) ---
-if is_staff:
+    if is_staff:
         with tabs[2]:
             st.header("Criar Novo Evento")
             with st.form("novo_evento"):
