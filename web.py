@@ -55,7 +55,7 @@ with tabs[1]:
                             st.rerun()
 
     # --- ABA 3: GERIR EVENTOS (PROFESSOR / ADMIN) ---
-    if is_staff:
+Sif is_staff:
         with tabs[2]:
             st.header("Criar Novo Evento")
             with st.form("novo_evento"):
